@@ -32,8 +32,7 @@ class UserflowExtension(object):
         self.app = app
         self.datastore = datastore
 
-        config = self.config_cls(app.config)
-        self.config = config
+        self.config = config = self.config_cls(app.config)
         self.request_utils = self.request_utils_cls(config, geoip)
         self.emails = self.emails_cls(config, message_cls, celery, jinja_env or app.jinja_env)
         self.authomatic = authomatic or Authomatic(config['AUTHOMATIC_CONFIG'],
