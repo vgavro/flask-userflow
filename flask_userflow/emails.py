@@ -2,11 +2,7 @@ class Emails(object):
     message_cls = None
     jinja_env = None
 
-    names = ['register_start', 'register_finish', 'password_restore_start']
-    templates = {
-        name: ['emails/{}_subject.txt'.format(name), 'emails/{}.html'.format(name)]
-        for name in names
-    }
+    names = ['register_start', 'register_finish', 'restore_start']
 
     def __init__(self, config, message_cls, celery, jinja_env):
         if message_cls:
@@ -18,9 +14,10 @@ class Emails(object):
             except ImportError:
                 pass
 
-        if not message_cls:
+        if not self.message_cls:
             def send(*args, **kwargs):
-                raise RuntimeError('No flask_emails and message_cls is not configured')
+                raise RuntimeError('No flask_emails, and message_cls is not configured')
+            self.send = send
         elif celery:
             def send(self, to, name, context, locale=None):
                 return self.send_task.delay(to, name, context, locale)
@@ -41,9 +38,10 @@ class Emails(object):
         self.messages = {}
 
     def _create(self, name):
-        data = self.templates[name]
-        subject = self.jinja_env.get_template(data[0])
-        html = self.jinja_env.get_template(data[1])
+        subject_template = 'userflow/emails/{}_subject.txt'.format(name)
+        html_template = 'userflow/emails/{}.html'.format(name)
+        subject = self.jinja_env.get_template(subject_template)
+        html = self.jinja_env.get_template(html_template)
 
         message = self.message_cls(subject=subject, html=html)
         if self.dkim_key:
@@ -56,4 +54,4 @@ class Emails(object):
             raise ValueError('No email with name {} registered'.format(name))
         if name not in self.messages:
             self.messages[name] = self._create(name)
-        self.messages[name].send(to, render=context)
+        self.messages[name].send(to=to, render=context)

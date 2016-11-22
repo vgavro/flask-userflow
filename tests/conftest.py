@@ -5,7 +5,7 @@ import pytest
 from flask import Flask
 
 from flask_userflow import Userflow, SQLAlchemyDatastore, UserMixin
-from utils import Response, TestClient
+from utils import Response, TestClient, populate_datastore
 
 
 @pytest.fixture()
@@ -17,6 +17,9 @@ def app():
     app.debug = True
     app.config['SECRET_KEY'] = 'secret'
     app.config['LOCALES'] = ['en', 'ru']
+    app.config['EMAIL_BACKEND'] = 'flask_emails.backends.DummyBackend'
+    app.config['EMAIL_DEFAULT_FROM'] = 'py@test'
+    app.config['USERFLOW_PASSWORD_ROUNDS'] = 4
     return app
 
 
@@ -35,9 +38,13 @@ def sqlalchemy_datastore(request, tmpdir, app):
     class User(db.Model, UserMixin):
         id = db.Column(db.Integer, primary_key=True)
         email = db.Column(db.String(255), unique=True)
-        username = db.Column(db.String(255))
+        name = db.Column(db.String(255))
+        auth_id = db.Column(db.String(255), unique=True)
         password = db.Column(db.String(255))
         active = db.Column(db.Boolean())
+
+        locale = db.Column(db.String(255))
+        timezone = db.Column(db.String(255))
 
     with app.app_context():
         db.create_all()
@@ -50,6 +57,8 @@ def sqlalchemy_datastore(request, tmpdir, app):
 @pytest.fixture()
 def sqlalchemy_app(app, sqlalchemy_datastore):
     app.userflow = Userflow(app, datastore=sqlalchemy_datastore)
+    with app.app_context():
+        populate_datastore(app.userflow)
     return app
 
 

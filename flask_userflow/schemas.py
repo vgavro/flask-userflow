@@ -14,20 +14,18 @@ class TokenMixin(object):
 
     def _load_token(self, name, token):
         max_age = _userflow.config['{}_AGE'.format(name.upper())]
-        serializer = getattr(_userflow, '{}_serializer')
+        serializer = getattr(_userflow, '{}_serializer'.format(name))
         try:
             return serializer.loads(token, max_age=max_age)
         except SignatureExpired:
-            raise ma.ValidationError('TOKEN_EXPIRED', fields=[self.token])
+            raise ma.ValidationError('TOKEN_EXPIRED', field_names=['token'])
         except (BadSignature, TypeError, ValueError):
-            raise ma.ValidationError('INVALID_TOKEN', fields=[self.token])
+            raise ma.ValidationError('INVALID_TOKEN', field_names=['token'])
 
 
 class UserMixin(object):
     def _get_user(self, email):
-        if not hasattr(self, '_user'):
-            self._user = _userflow.datastore.find_user(email=email)
-        return self._user
+        return _userflow.datastore.find_user(email=email)
 
 
 class UnregisteredEmailMixin(UserMixin):
@@ -62,7 +60,7 @@ class ConfirmPasswordMixin(PasswordMixin):
         if 'password' in data and 'confirm_password' in data:
             if data['password'] != data['confirm_password']:
                 raise ma.ValidationError('PASSWORD_MISMATCH',
-                                         fields=[self.confirm_password])
+                                         field_names=['confirm_password'])
 
 
 class I18nValidationMixin(object):
@@ -88,15 +86,17 @@ class SetI18nSchema(I18nValidationMixin, BaseSchema):
 
 
 class LoginSchema(RegisteredEmailMixin, PasswordMixin, BaseSchema):
-    remember = ma.fields.Boolean(required=True)
+    remember = ma.fields.Boolean(required=False)
 
     @ma.post_load
     def user(self, data):
         user = self._get_user(data['email'])
-        if not user.validate_password(data['password']):
-            raise ma.ValidationError('INVALID_PASSWORD', fields=[self.email])
+        if not user.verify_password(data['password']):
+            raise ma.ValidationError('INVALID_PASSWORD', field_names=['password'])
         if not user.is_active:
             raise ma.ValidationError('DISABLED_ACCOUNT')
+
+        data.setdefault('remember', False)
         return user, data
 
 
@@ -107,7 +107,7 @@ class RegisterStartSchema(UnregisteredEmailMixin, BaseSchema):
 class RegisterConfirmSchema(TokenMixin, BaseSchema):
     @ma.post_load
     def data(self, data):
-        data.update(self._load_token('register_confirm', data['token']))
+        data.update({'email': self._load_token('register_confirm', data['token'])})
         return data
 
 
@@ -117,59 +117,57 @@ class RegisterFinishSchema(TokenMixin, ConfirmPasswordMixin, I18nValidationMixin
 
     @ma.post_load
     def data(self, data):
-        data.update(self._load_token('register_confirm', data.pop('token')))
+        data.update({'email': self._load_token('register_confirm', data['token'])})
         return data
 
 
-class PasswordRestoreStartSchema(RegisteredEmailMixin, BaseSchema):
+class RestoreStartSchema(RegisteredEmailMixin, BaseSchema):
     pass
 
 
-class PasswordRestoreConfirmSchema(TokenMixin, UserMixin, BaseSchema):
+class RestoreConfirmSchema(TokenMixin, UserMixin, BaseSchema):
     @ma.post_load
     def data(self, data):
-        data.update('password_restore', self._load_token(data['token']))
+        data.update({'email': self._load_token('restore_confirm', data['token'])})
         user = self._get_user(data['email'])
         if not user:
-            raise ma.ValidationError('USER_DOES_NOT_EXIST')
-        return user, data
+            raise ma.ValidationError('USER_DOES_NOT_EXIST', field_names=['token'])
+        return data
 
 
-class PasswordRestoreFinishSchema(BaseSchema):
+class RestoreFinishSchema(BaseSchema):
     token = ma.fields.Str(required=True)
 
     @ma.post_load
     def data(self, data):
-        data.update('password_restore', self._load_token(data['token']))
+        data.update({'email': self._load_token('restore_confirm', data['token'])})
         return data
 
 
 class UserSchema(BaseSchema):
-    pass
+    name = ma.fields.Str(required=True)
+    id = ma.fields.Str(required=True)
+    email = ma.fields.Str(required=True)
 
 
 class ProviderUserSchema(BaseSchema):
-    pass
+    provider = ma.fields.Str(required=True)
+    provider_user_id = ma.fields.Str(required=True)
 
 
-class Schemas(object):
-    set_i18n = SetI18nSchema()
+schemas_map = {
+    'set_i18n': SetI18nSchema(),
 
-    login = LoginSchema()
+    'login': LoginSchema(),
 
-    register_start = RegisterStartSchema()
-    register_confirm = RegisterConfirmSchema()
-    register_finish = RegisterFinishSchema()
+    'register_start': RegisterStartSchema(),
+    'register_confirm': RegisterConfirmSchema(),
+    'register_finish': RegisterFinishSchema(),
 
-    password_restore_start = PasswordRestoreStartSchema()
-    password_restore_confirm = PasswordRestoreConfirmSchema()
-    password_restore_finish = PasswordRestoreFinishSchema()
+    'restore_start': RestoreStartSchema(),
+    'restore_confirm': RestoreConfirmSchema(),
+    'restore_finish': RestoreFinishSchema(),
 
-    user_schema = UserSchema()
-    provider_user_schema = ProviderUserSchema()
-
-    def __init__(self, config):
-        self.config = config
-
-    def errors_processor(self, errors):
-        return errors
+    'user_schema': UserSchema(),
+    'provider_user_schema': ProviderUserSchema(),
+}

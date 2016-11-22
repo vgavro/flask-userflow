@@ -16,11 +16,20 @@ class Userflow(object):
         self.datastore = datastore
 
         if app is not None and datastore is not None:
-            extension = self.init_app(app, datastore, **kwargs)
-            self.__dict__.update(extension.__dict__)
+            self.extension = self.init_app(app, datastore, **kwargs)
+
+    def __getattr__(self, name):
+        if hasattr(self, 'extension'):
+            return getattr(self.extension, name)
+        raise AttributeError()
 
     def init_app(self, app, datastore, **kwargs):
         extension_cls = kwargs.pop('extension_cls', self.extension_cls)
         extension = extension_cls(app, datastore, **kwargs)
         app.extensions['userflow'] = extension
         return extension
+
+
+__all__ = (
+    'Userflow', 'UserflowExtension', 'UserMixin', 'SQLAlchemyDatastore',
+)

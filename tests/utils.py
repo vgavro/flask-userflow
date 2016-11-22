@@ -15,3 +15,17 @@ class TestClient(FlaskClient):
             kwargs['data'] = json.dumps(kwargs.pop('json'))
             kwargs['content_type'] = 'application/json'
         return super(TestClient, self).open(*args, **kwargs)
+
+
+def populate_datastore(userflow):
+    users = [
+        ('vgavro@gmail.com', 'Victor Gavro', 'password', ['admin'], True),
+    ]
+
+    for u in users:
+        # password = userflow.encrypt_password(u[2])
+        user = userflow.datastore.user_model(email=u[0], name=u[1], active=u[4])
+        user.set_password(u[2])
+        user.generate_auth_id()
+        userflow.datastore.put(user)
+    userflow.datastore.commit()

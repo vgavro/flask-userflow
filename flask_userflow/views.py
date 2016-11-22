@@ -2,7 +2,7 @@ from datetime import datetime
 from functools import wraps
 
 from werkzeug.local import LocalProxy
-from flask import request, after_this_request, make_response, session, redirect, jsonify
+from flask import request, Response, after_this_request, make_response, session, redirect, jsonify
 from flask_login import login_user as _login_user, logout_user, current_user
 from authomatic.adapters import WerkzeugAdapter
 
@@ -12,15 +12,21 @@ from . import _userflow
 _datastore = LocalProxy(lambda: _userflow.datastore)
 
 
+def schema_errors_processor(errors):
+    response = jsonify({'errors': errors})
+    response.status_code = 422
+    return response
+
+
 def load_schema(schema_name):
     # using schema_name for lazy getting schema, in case of override
     def decorator(func):
         @wraps(func)
         def wrapper(payload, *args, **kwargs):
-            schema = getattr(_userflow.schemas, schema_name)
+            schema = _userflow.schemas[schema_name]
             data, errors = schema.load(payload or {})
             if errors:
-                return _userflow.schemas.errors_processor(errors)
+                return _userflow.views['_schema_errors_processor'](errors)
             else:
                 return func(data, *args, **kwargs)
         wrapper.load_schema_decorated = True
@@ -38,12 +44,15 @@ def request_json(func):
 def response_json(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
-        return jsonify(func(*args, **kwargs))
+        response = func(*args, **kwargs)
+        if not isinstance(response, Response):
+            return jsonify(response)
+        return response
     return wrapper
 
 
 def login_user(user, remember=False, provider=None):
-    assert user.is_active()
+    assert user.is_active
     logged_in = _login_user(user, remember)
     assert logged_in, 'Not logged in for unknown reason'
 
@@ -78,7 +87,8 @@ def logout():
 
 def status():
     if not current_user.is_anonymous:
-        user = _userflow.schemas.UserSchema.dump(current_user)
+        user, errors = _userflow.schemas['user_schema'].dump(current_user)
+        assert not errors
     else:
         user = None
 
@@ -94,7 +104,8 @@ def status():
             provider_user = _datastore.find_provider_user(provider=provider,
                                                           provider_user_id=provider_user_id)
             if provider_user:
-                auth_provider[provider] = _userflow.schemas.ProviderUserSchema.dump(provider_user)
+                schema = _userflow.schemas['ProviderUserSchema']
+                auth_provider[provider] = schema.dump(provider_user)
             else:
                 session['auth_provider'].pop(provider)
         if not session['auth_provider']:
@@ -112,10 +123,14 @@ def status():
 def set_i18n(data):
     if 'timezone' in data:
         current_user.timezone = data['timezone']
-    elif 'locale' in data:
+    if 'locale' in data:
         current_user.locale = data['locale']
     if not current_user.is_anonymous:
         _datastore.commit()
+
+
+def timezones():
+    return {'timezones': _userflow.get_timezone_choices()}
 
 
 def provider_login(provider, goal):
@@ -151,7 +166,7 @@ def provider_login(provider, goal):
 
         if provider_user.user_id:
             user = _datastore.find_user(id=provider_user.user_id)
-            if not user.is_active():
+            if not user.is_active:
                 return redirect(_userflow.config['PROVIDER_LOGIN_INACTIVE_URL'])
             login_user(user, False, provider)
             return redirect(_userflow.config['PROVIDER_LOGIN_SUCCEED_URL'])
@@ -160,7 +175,7 @@ def provider_login(provider, goal):
             user = _datastore.find_user(email=result.user.email)
             if user:
                 provider_user.user_id = user.id
-                if not user.is_active():
+                if not user.is_active:
                     return redirect(_userflow.config['PROVIDER_LOGIN_INACTIVE_URL'])
                 login_user(user, False, provider)
                 return redirect(_userflow.config['PROVIDER_LOGIN_SUCCEED_URL'])
@@ -174,7 +189,7 @@ def provider_login(provider, goal):
         session['auth_provider'][provider] = result.user.id
 
         if result.user.email:
-            token = _userflow.register_serializer.dump(result.user.email)
+            token = _userflow.register_confirm_serializer.dumps(result.user.email)
             confirm_url = _userflow.config['REGISTER_CONFIRM_URL'].format(token)
             return redirect(confirm_url)
         else:
@@ -183,7 +198,7 @@ def provider_login(provider, goal):
 
 @load_schema('register_start')
 def register_start(data):
-    token = _userflow.register_serializer.dump(data['email'])
+    token = _userflow.register_confirm_serializer.dumps(data['email'])
     confirm_url = _userflow.config['REGISTER_CONFIRM_URL'].format(token)
     _userflow.emails.send('register_start', data['email'], {'confirm_url': confirm_url})
 
@@ -197,57 +212,81 @@ def register_confirm(data):
 def register_finish(data, login=True, login_remember=False):
     user = _datastore.user_model(email=data['email'], locale=data['locale'],
                                  timezone=data['timezone'])
+    user.active = True
     user.set_password(data['password'])
     user.generate_auth_id()
+    _datastore.put(user)
     if login:
         auth_token = login_user(user, login_remember)
     else:
         auth_token = None
 
-    _datastore.commit()
+    _datastore.commit()  # TODO: to get user_id
+
+    provider_associated = False
 
     for provider, provider_user_id in session.get('auth_provider', {}).items():
         provider_user = _datastore.find_provider_user(provider=provider,
                                                       provider_user_id=provider_user_id)
         if provider_user:
+            provider_associated = True
             provider_user.user_id = user.id
     session.pop('auth_provider', None)
 
-    after_this_request(lambda r: _datastore.commit())
+    if provider_associated:
+        _datastore.commit()
+
     return {
         'auth_token': auth_token
     }
 
 
-@load_schema('password_restore_start')
-def password_restore_start(data):
-    token = _userflow.password_restore_serializer.dump(data['email'])
-    confirm_url = _userflow.config['PASSWORD_RESTORE_CONFIRM_URL'].format(token)
-    _userflow.emails.send('password_restore_start',
+@load_schema('restore_start')
+def restore_start(data):
+    token = _userflow.restore_confirm_serializer.dumps(data['email'])
+    confirm_url = _userflow.config['RESTORE_CONFIRM_URL'].format(token)
+    _userflow.emails.send('restore_start',
                           data['email'], {'confirm_url': confirm_url})
 
 
-@load_schema('password_restore_confirm')
-def password_restore_confirm(data):
+@load_schema('restore_confirm')
+def restore_confirm(data):
     return data
 
 
-@load_schema('password_restore_finish')
-def password_restore_finish(data, login=True, login_remember=False):
+@load_schema('restore_finish')
+def restore_finish(data, login=True, login_remember=False):
     raise NotImplementedError()
 
 
-def add_api_routes(config, blueprint):
-    views = ['login', 'logout', 'status', 'set_i18n', 'register_start',
-             'register_confirm', 'register_finish', 'password_restore_start',
-             'password_restore_confirm', 'password_restore_finish']
+views_map = {
+    '_schema_errors_processor': schema_errors_processor,
 
-    for name in views:
+    'login': login,
+    'logout': logout,
+    'status': status,
+    'set_i18n': set_i18n,
+    'timezones': timezones,
+
+    'register_start': register_start,
+    'register_confirm': register_confirm,
+    'register_finish': register_finish,
+    'restore_start': restore_start,
+
+    'restore_confirm': restore_confirm,
+    'restore_finish': restore_finish,
+}
+
+
+def add_api_routes(config, views_map, blueprint):
+    for name, view in views_map.items():
+        if name.startswith('_'):
+            continue
+
         def _conf(key):
             return config[key.format(name.upper())]
 
         if _conf('{}_API_URL'):
-            view = globals()[name]
             if hasattr(view, 'load_schema_decorated'):
                 view = request_json(view)
             view = response_json(view)

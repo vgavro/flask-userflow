@@ -10,6 +10,7 @@ requires = [
     'ua_parser',
     'marshmallow',
     'authomatic',
+    'flask_emails',
 ]
 
 test_requires = [

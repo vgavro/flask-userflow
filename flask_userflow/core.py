@@ -12,9 +12,9 @@ from authomatic import Authomatic
 from .settings import Config
 from .request_utils import RequestUtils
 from .emails import Emails
-from .schemas import Schemas
+from .schemas import schemas_map
 from .models import AnonymousUser
-from . import views
+from .views import views_map, add_api_routes as _add_api_routes
 
 
 class UserflowExtension(object):
@@ -23,10 +23,12 @@ class UserflowExtension(object):
     config_cls = Config
     request_utils_cls = RequestUtils
     emails_cls = Emails
-    schemas_cls = Schemas
+    schemas = schemas_map
+    views = views_map
 
     def __init__(self, app, datastore, geoip=None, celery=None, message_cls=None,
-                 jinja_env=None, authomatic=None, add_api_routes=True):
+                 jinja_env=None, authomatic=None, views=None, schemas=None,
+                 add_api_routes=True):
         self.app = app
         self.datastore = datastore
 
@@ -34,24 +36,27 @@ class UserflowExtension(object):
         self.config = config
         self.request_utils = self.request_utils_cls(config, geoip)
         self.emails = self.emails_cls(config, message_cls, celery, jinja_env or app.jinja_env)
-        self.schemas = self.schemas_cls(config)
         self.authomatic = authomatic or Authomatic(config['AUTHOMATIC_CONFIG'],
                                                    config['AUTHOMATIC_SECRET_KEY'])
 
-        self.blueprint = Blueprint('flask_userflow', 'flask_userflow',
+        self.schemas = schemas or self.schemas
+        self.views = views or self.views
+
+        self.blueprint = Blueprint('userflow', 'flask_userflow',
                                    url_prefix=config['URL_PREFIX'],
                                    subdomain=config['SUBDOMAIN'],
                                    template_folder='templates')
         if add_api_routes:
-            views.add_api_routes(config, self.blueprint)
+            _add_api_routes(config, self.views, self.blueprint)
         app.register_blueprint(self.blueprint)
 
         self._init_login_manager()
         self._init_principal()
 
         self.auth_token_serializer = self._create_serializer('auth_token')
-        self.register_serializer = self._create_serializer('register')
-        self.password_restore_serializer = self._create_serializer('password_restore')
+        self.register_confirm_serializer = self._create_serializer('register_confirm')
+        self.restore_confirm_serializer = \
+            self._create_serializer('restore_confirm')
 
     def _init_login_manager(self):
         self.login_manager = LoginManager(self.app)
@@ -89,8 +94,8 @@ class UserflowExtension(object):
     def encrypt_password(self, password):
         if isinstance(password, unicode):
             password = password.encode('utf8')
-        salt = bcrypt.gensalt(rounds=self.config['PASSWORD_SALT_ROUNDS'],
-                              prefix=self.config['PASSWORD_SALT_PREFIX'])
+        salt = bcrypt.gensalt(rounds=self.config['PASSWORD_ROUNDS'],
+                              prefix=self.config['PASSWORD_IDENT'])
         return bcrypt.hashpw(password, salt)
 
     def verify_password(self, password, password_hash):

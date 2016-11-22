@@ -23,7 +23,7 @@ class AnonymousUser(AnonymousUserMixin):
     @timezone.setter
     def timezone(self, value):
         self._timezone = value
-        _userflow.set_i18n_info(timezone=value)
+        _userflow.request_utils.set_i18n_info(timezone=value)
 
     @property
     def locale(self):
@@ -86,7 +86,7 @@ class UserMixin(UserMixin):
         _userflow.datastore.commit()
 
     def has_role(self, name):
-        return bool(_userflow._datastore.find_role(user_id=self.id, name=name))
+        return name in self.roles
 
     @property
     def timezone(self):
