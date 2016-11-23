@@ -256,7 +256,9 @@ def restore_confirm(data):
 
 @load_schema('restore_finish')
 def restore_finish(data, login=True, login_remember=False):
-    raise NotImplementedError()
+    user, data = data
+    user.set_password(data['password'])
+    _datastore.commit()
 
 
 views_map = {
@@ -272,7 +274,6 @@ views_map = {
     'register_confirm': register_confirm,
     'register_finish': register_finish,
     'restore_start': restore_start,
-
     'restore_confirm': restore_confirm,
     'restore_finish': restore_finish,
 }

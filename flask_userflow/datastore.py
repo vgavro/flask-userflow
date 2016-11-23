@@ -1,3 +1,6 @@
+from functools import partial
+
+
 class Datastore(object):
     def __init__(self, db, user_model, role_model=None, provider_user_model=None,
                  track_login_model=None):
@@ -6,6 +9,7 @@ class Datastore(object):
         self.role_model = role_model
         self.provider_user_model = provider_user_model
         self.track_login_model = track_login_model
+        self._bind_methods()
 
     def commit(self):
         raise NotImplementedError()
@@ -25,20 +29,16 @@ class Datastore(object):
         except IndexError:
             return None
 
-    def find_users(self, **kwargs):
-        return self._find_models(self.user_model, **kwargs)
-
-    def find_roles(self, **kwargs):
-        assert self.role_model
-        return self._find_models(self.role_model, **kwargs)
-
-    def find_provider_users(self, **kwargs):
-        assert self.provider_user_model
-        return self._find_models(self.provider_user_model, **kwargs)
-
-    def find_track_login(self, **kwargs):
-        assert self.track_login_model
-        return self._find_models(self.track_login_model, **kwargs)
+    def _bind_methods(self):
+        for model_name in 'user', 'role', 'provider_user', 'track_login':
+            model = getattr(self, '{}_model'.format(model_name))
+            if model:
+                find_models = 'find_{}s'.format(model_name)
+                find_model = 'find_{}'.format(model_name)
+                if not hasattr(self, find_models):
+                    setattr(self, find_models, partial(self._find_models, model))
+                if not hasattr(self, find_model):
+                    setattr(self, find_model, partial(self._find_model, model))
 
 
 class SQLAlchemyDatastore(Datastore):

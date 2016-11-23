@@ -150,6 +150,32 @@ def test_register_finish_success(client):
     assert resp.json['user']['email'] == email
 
 
+def test_register_finish_fail(client):
+    token = client.application.userflow.register_confirm_serializer.dumps('py@test.com')
+
+    resp = client.put('/user/register', json={
+        'name': 'Vasya Pupkin',
+        'token': token,
+        'password': '',
+        'confirm_password': '',
+        'timezone': 'Europe/Kiev',
+        'locale': 'ru',
+    })
+    assert resp.status_code == 422
+    assert 'password' in resp.json['errors']
+
+    resp = client.put('/user/register', json={
+        'name': 'Vasya Pupkin',
+        'token': token,
+        'password': 'Some password',
+        'confirm_password': 'Wrong password',
+        'timezone': 'Europe/Kiev',
+        'locale': 'ru',
+    })
+    assert resp.status_code == 422
+    assert 'confirm_password' in resp.json['errors']
+
+
 def test_restore_success(client):
     resp = client.post('/user/restore', json={'email': 'vgavro@gmail.com'})
     assert resp.status_code == 200
@@ -167,3 +193,42 @@ def test_restore_confirm_success(client):
     resp = client.post('/user/restore_confirm', json={'token': token})
     assert resp.status_code == 200
     assert resp.json['email'] == email
+
+
+def test_restore_confirm_fail(client):
+    resp = client.post('/user/restore_confirm', json={})
+    assert resp.status_code == 422
+    assert 'token' in resp.json['errors']
+
+    token = client.application.userflow.restore_confirm_serializer.dumps('py@test.com')
+    resp = client.post('/user/restore_confirm', json={'token': ''.join(reversed(token))})
+    assert resp.status_code == 422
+    assert 'token' in resp.json['errors']
+
+
+def test_restore_finish_success(client):
+    email = 'vgavro@gmail.com'
+    new_password = 'newpassword'
+    token = client.application.userflow.restore_confirm_serializer.dumps(email)
+    resp = client.put('/user/restore', json={'token': token, 'password': new_password,
+                                             'confirm_password': new_password})
+    assert resp.status_code == 200
+    with client.application.app_context():
+        user = client.application.userflow.datastore.find_user(email=email)
+        assert user.verify_password(new_password)
+
+
+def test_restore_finish_fail(client):
+    email = 'matt@lp.com'
+    token = client.application.userflow.restore_confirm_serializer.dumps(email)
+    resp = client.put('/user/restore', json={'token': token, 'password': 'password',
+                                             'confirm_password': 'password'})
+    assert resp.status_code == 422
+    assert 'token' in resp.json['errors']
+
+    email = 'vgavro@gmail.com'
+    token = client.application.userflow.restore_confirm_serializer.dumps(email)
+    resp = client.put('/user/restore', json={'token': token, 'password': 'password',
+                                             'confirm_password': 'wrong_password'})
+    assert resp.status_code == 422
+    assert 'confirm_password' in resp.json['errors']

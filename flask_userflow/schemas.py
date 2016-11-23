@@ -1,5 +1,6 @@
 import pytz
 import marshmallow as ma
+from marshmallow import validate
 from itsdangerous import BadSignature, SignatureExpired
 
 from . import _userflow
@@ -49,7 +50,7 @@ class RegisteredEmailMixin(UserMixin):
 
 
 class PasswordMixin(object):
-    password = ma.fields.Str(required=True)
+    password = ma.fields.Str(required=True, validate=[validate.Length(min=6, max=64)])
 
 
 class ConfirmPasswordMixin(PasswordMixin):
@@ -135,13 +136,14 @@ class RestoreConfirmSchema(TokenMixin, UserMixin, BaseSchema):
         return data
 
 
-class RestoreFinishSchema(BaseSchema):
-    token = ma.fields.Str(required=True)
-
+class RestoreFinishSchema(ConfirmPasswordMixin, TokenMixin, UserMixin, BaseSchema):
     @ma.post_load
     def data(self, data):
         data.update({'email': self._load_token('restore_confirm', data['token'])})
-        return data
+        user = self._get_user(data['email'])
+        if not user:
+            raise ma.ValidationError('USER_DOES_NOT_EXIST', field_names=['token'])
+        return user, data
 
 
 class UserSchema(BaseSchema):
