@@ -113,8 +113,8 @@ class RegisterConfirmSchema(TokenMixin, BaseSchema):
 
 
 class RegisterFinishSchema(TokenMixin, ConfirmPasswordMixin, I18nValidationMixin, BaseSchema):
-    locale = ma.fields.Str(required=True)
-    timezone = ma.fields.Str(required=True)
+    locale = ma.fields.Str(required=False)
+    timezone = ma.fields.Str(required=False)
 
     @ma.post_load
     def data(self, data):

@@ -131,7 +131,7 @@ def test_register_confirm_fail(client):
     assert 'token' in resp.json['errors']
 
 
-def test_register_finish_success(client):
+def test_register_finish_success_with_i18n(client):
     email = 'py@test.com'
     token = client.application.userflow.register_confirm_serializer.dumps(email)
     resp = client.put('/user/register', json={
@@ -148,6 +148,27 @@ def test_register_finish_success(client):
     resp = client.get('/user/status')
     assert resp.status_code == 200
     assert resp.json['user']['email'] == email
+    assert resp.json['locale'] == 'ru'
+    assert resp.json['timezone'] == 'Europe/Kiev'
+
+
+def test_register_finish_success_without_i18n(client):
+    email = 'py@test.com'
+    token = client.application.userflow.register_confirm_serializer.dumps(email)
+    resp = client.put('/user/register', json={
+        'name': 'Vasya Pupkin',
+        'email': 'wrong@email.com',
+        'token': token,
+        'password': 'Some password',
+        'confirm_password': 'Some password',
+    }, headers={'Accept-Language': 'ru;q=1, en-gb;q=0.8, en;q=0.7'})
+    assert resp.status_code == 200
+
+    resp = client.get('/user/status')
+    assert resp.status_code == 200
+    assert resp.json['user']['email'] == email
+    assert resp.json['locale'] == 'ru'
+    assert resp.json['timezone'] == 'UTC'
 
 
 def test_register_finish_fail(client):
@@ -158,8 +179,6 @@ def test_register_finish_fail(client):
         'token': token,
         'password': '',
         'confirm_password': '',
-        'timezone': 'Europe/Kiev',
-        'locale': 'ru',
     })
     assert resp.status_code == 422
     assert 'password' in resp.json['errors']
@@ -169,11 +188,19 @@ def test_register_finish_fail(client):
         'token': token,
         'password': 'Some password',
         'confirm_password': 'Wrong password',
-        'timezone': 'Europe/Kiev',
-        'locale': 'ru',
     })
     assert resp.status_code == 422
     assert 'confirm_password' in resp.json['errors']
+
+    resp = client.put('/user/register', json={
+        'name': 'Vasya Pupkin',
+        'token': token,
+        'password': 'Some password',
+        'confirm_password': 'Wrong password',
+        'locale': 'es',
+    })
+    assert resp.status_code == 422
+    assert 'locale' in resp.json['errors']
 
 
 def test_restore_success(client):

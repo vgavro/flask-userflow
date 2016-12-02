@@ -210,8 +210,10 @@ def register_confirm(data):
 
 @load_schema('register_finish')
 def register_finish(data, login=True, login_remember=False):
-    user = _datastore.user_model(email=data['email'], locale=data['locale'],
-                                 timezone=data['timezone'])
+    locale = data.get('locale', current_user.locale)
+    timezone = data.get('timezone', current_user.timezone)
+    user = _datastore.user_model(email=data['email'], locale=locale,
+                                 timezone=timezone)
     user.active = True
     user.set_password(data['password'])
     user.generate_auth_id()
