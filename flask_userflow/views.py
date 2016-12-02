@@ -59,8 +59,7 @@ def login_user(user, remember=False, provider=None):
     session.pop('auth_provider', None)
 
     if _datastore.track_login_model:
-        track_login = _datastore.track_login_model()
-        track_login.populate(
+        track_login = _datastore.create_track_login(
             time=datetime.utcnow(),
             remote_addr=_userflow.request_utils.get_remote_addr(),
             geoip_info=_userflow.request_utils.get_geoip_info(),
@@ -151,11 +150,11 @@ def provider_login(provider, goal):
         provider_user = _datastore.find_provider_user(provider=provider,
                                                       provider_user_id=result.user.id)
         if provider_user:
-            provider_user.populate(result.user)
+            provider_user.set_provider_data(result.user)
         else:
-            provider_user = _datastore.provider_user_model()
-            provider_user.provider = provider
-            provider_user.populate(result.user)
+            provider_user = _datastore.create_provider_user(provider=provider,
+                                                            provider_user_id=result.user.id)
+            provider_user.set_provider_data(result.user)
             _datastore.put(provider_user)
 
         after_this_request(lambda r: _datastore.commit())
@@ -212,9 +211,10 @@ def register_confirm(data):
 def register_finish(data, login=True, login_remember=False):
     locale = data.get('locale', current_user.locale)
     timezone = data.get('timezone', current_user.timezone)
-    user = _datastore.user_model(email=data['email'], locale=locale,
-                                 timezone=timezone)
-    user.active = True
+    user = _datastore.create_user(email=data['email'], is_active=True,
+                                  locale=locale, timezone=timezone)
+    if not user.is_active:
+        user.is_active = True
     user.set_password(data['password'])
     user.generate_auth_id()
     _datastore.put(user)

@@ -8,10 +8,7 @@ from .utils import md5
 from . import _userflow
 
 
-class AnonymousUser(AnonymousUserMixin):
-    def __init__(self):
-        self.roles = ImmutableList()
-
+class I18NMixin(object):
     @cached_property
     def _i18n_info(self):
         return _userflow.request_utils.get_i18n_info()
@@ -34,14 +31,29 @@ class AnonymousUser(AnonymousUserMixin):
         self._locale = value
         _userflow.request_utils.set_i18n_info(locale=value)
 
+
+class AnonymousUser(I18NMixin, AnonymousUserMixin):
+    def __init__(self):
+        self.roles = ImmutableList()
+
     def has_role(self, *args):
         return False
 
 
-class UserMixin(UserMixin):
+class UserMixin(I18NMixin, UserMixin):
+    @property
+    def id(self):
+        """Used for relations with other models"""
+        raise NotImplementedError()
+
+    @property
+    def auth_id(self):
+        """Used for authentication"""
+        raise NotImplementedError()
+
     @property
     def is_active(self):
-        return self.active
+        return True
 
     def get_auth_token(self):
         """Returns the user's authentication token."""
@@ -72,7 +84,7 @@ class UserMixin(UserMixin):
     def add_role(self, name):
         if not _userflow.datastore.role_model:
             raise NotImplementedError('Implement this or add role_model to datastore')
-        role = _userflow.datastore.role_model(name=name, user_id=self.id)
+        role = _userflow.datastore.create_role(name=name, user_id=self.id)
         _userflow.datastore.put(role)
         _userflow.datastore.commit()
 
@@ -85,13 +97,6 @@ class UserMixin(UserMixin):
             _userflow.datastore.delete(role)
         _userflow.datastore.commit()
 
-    def has_role(self, name):
-        return name in self.roles
-
-    @property
-    def timezone(self):
-        raise NotImplementedError()
-
-    @property
-    def locale(self):
-        raise NotImplementedError()
+    def has_role(self, *args):
+        roles = self.roles
+        return all(r in roles for r in args)

@@ -41,7 +41,7 @@ def sqlalchemy_datastore(request, tmpdir, app):
         name = db.Column(db.String(255))
         auth_id = db.Column(db.String(255), unique=True)
         password = db.Column(db.String(255))
-        active = db.Column(db.Boolean())
+        is_active = db.Column(db.Boolean())
 
         locale = db.Column(db.String(255))
         timezone = db.Column(db.String(255))

@@ -24,7 +24,7 @@ def populate_datastore(userflow):
 
     for u in users:
         # password = userflow.encrypt_password(u[2])
-        user = userflow.datastore.user_model(email=u[0], name=u[1], active=u[4])
+        user = userflow.datastore.create_user(email=u[0], name=u[1], is_active=u[4])
         user.set_password(u[2])
         user.generate_auth_id()
         userflow.datastore.put(user)
