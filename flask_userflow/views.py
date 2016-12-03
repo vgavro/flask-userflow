@@ -238,9 +238,9 @@ def register_finish(data, login=True, login_remember=False):
     if provider_associated:
         _datastore.commit()
 
-    return {
-        'auth_token': auth_token
-    }
+    data = status()
+    data['auth_token'] = auth_token
+    return data
 
 
 @load_schema('restore_start')
