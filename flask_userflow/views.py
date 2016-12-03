@@ -262,6 +262,15 @@ def restore_finish(data, login=True, login_remember=False):
     user.set_password(data['password'])
     _datastore.commit()
 
+    if login:
+        auth_token = login_user(user, login_remember)
+    else:
+        auth_token = None
+
+    data = status()
+    data['auth_token'] = auth_token
+    return data
+
 
 views_map = {
     '_schema_errors_processor': schema_errors_processor,
