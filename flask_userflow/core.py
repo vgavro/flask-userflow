@@ -95,7 +95,7 @@ class UserflowExtension(object):
             password = password.encode('utf8')
         salt = bcrypt.gensalt(rounds=self.config['PASSWORD_ROUNDS'],
                               prefix=self.config['PASSWORD_IDENT'])
-        return bcrypt.hashpw(password, salt)
+        return bcrypt.hashpw(password, salt).decode('utf8')
 
     def verify_password(self, password, password_hash):
         if isinstance(password, unicode):
