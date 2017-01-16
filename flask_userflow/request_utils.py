@@ -2,11 +2,7 @@ from datetime import datetime, timedelta
 
 import pytz
 from ua_parser import user_agent_parser
-from werkzeug.local import LocalProxy
-from flask import request, session
-
-
-request_cache = LocalProxy(lambda: {})
+from flask import request, session, _app_ctx_stack as stack
 
 
 class RequestUtils(object):
@@ -92,23 +88,27 @@ class RequestUtils(object):
         return result
 
     def get_geoip_info(self):
-        if 'geoip_info' not in request_cache:
-            remote_addr = self.get_remote_addr()
-            if not self.geoip:
-                raise RuntimeError('Override this method or configure it '
-                                   'with flask_geoip2 instance')
-            try:
-                r = self.geoip.city(remote_addr)
-            except r.AddressNotFoundError:
-                r = None
-            request_cache['geoip_info'] = {
-                'country': r and r.country.iso_code or None,
-                'city': r and r.city.name or None,
-                'lat': r and r.location.latitude or None,
-                'lng': r and r.location.longitude or None,
-                'timezone': r and r.location.time_zone or None
-            }
-        return request_cache['geoip_info']
+        ctx = stack.top
+        empty = {'country': None, 'city': None, 'lat': None, 'lng': None, 'timezone': None}
+        if ctx is not None:
+            if not hasattr(ctx, '_geoip_info'):
+                remote_addr = self.get_remote_addr()
+                if not self.geoip:
+                    raise RuntimeError('Override this method or configure it '
+                                       'with flask_geoip2 instance')
+                try:
+                    r = self.geoip.city(remote_addr)
+                    ctx._geoip_info = {
+                        'country': r.country.iso_code,
+                        'city': r.city.name,
+                        'lat': r.location.latitude,
+                        'lng': r.location.longitude,
+                        'timezone': r.location.time_zone,
+                    }
+                except r.AddressNotFoundError:
+                    ctx._geoip_info = empty
+            return ctx._geoip_info
+        return empty
 
     def get_ua_info(self):
         return user_agent_parser.Parse(request.headers.get('User-Agent'))
