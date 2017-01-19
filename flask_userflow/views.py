@@ -199,7 +199,8 @@ def provider_login(provider, goal):
 def register_start(data):
     token = _userflow.register_confirm_serializer.dumps(data['email'])
     confirm_url = _userflow.config['REGISTER_CONFIRM_URL'].format(token)
-    _userflow.emails.send('register_start', data['email'], {'confirm_url': confirm_url})
+    _userflow.emails.send('register_start', data['email'],
+                          {'confirm_url': confirm_url, 'token': token})
 
 
 @load_schema('register_confirm')
@@ -247,8 +248,8 @@ def register_finish(data, login=True, login_remember=False):
 def restore_start(data):
     token = _userflow.restore_confirm_serializer.dumps(data['email'])
     confirm_url = _userflow.config['RESTORE_CONFIRM_URL'].format(token)
-    _userflow.emails.send('restore_start',
-                          data['email'], {'confirm_url': confirm_url})
+    _userflow.emails.send('restore_start', data['email'],
+                          {'confirm_url': confirm_url, 'token': token})
 
 
 @load_schema('restore_confirm')

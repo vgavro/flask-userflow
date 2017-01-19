@@ -2,8 +2,6 @@ class Emails(object):
     message_cls = None
     jinja_env = None
 
-    names = ['register_start', 'register_finish', 'restore_start']
-
     def __init__(self, config, message_cls, celery, jinja_env):
         if message_cls:
             self.message_cls = message_cls
@@ -35,14 +33,11 @@ class Emails(object):
         if jinja_env:
             self.jinja_env = jinja_env
 
-        self.messages = {}
-
-    def _create(self, name):
+    def create(self, name, context, locale):
         subject_template = 'userflow/emails/{}_subject.txt'.format(name)
         html_template = 'userflow/emails/{}.html'.format(name)
-        subject = self.jinja_env.get_template(subject_template)
-        html = self.jinja_env.get_template(html_template)
-
+        subject = self.jinja_env.get_template(subject_template).render(**context)
+        html = self.jinja_env.get_template(html_template).render(**context)
         message = self.message_cls(subject=subject, html=html)
         if self.dkim_key:
             message.dkim(key=self.dkim_key, domain=self.dkim_domain,
@@ -50,8 +45,5 @@ class Emails(object):
         return message
 
     def _send(self, name, to, context, locale=None):
-        if name not in self.names:
-            raise ValueError('No email with name {} registered'.format(name))
-        if name not in self.messages:
-            self.messages[name] = self._create(name)
-        self.messages[name].send(to=to, render=context)
+        message = self.create(name, context, locale)
+        message.send(to=to)
