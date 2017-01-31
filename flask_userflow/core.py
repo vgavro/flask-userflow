@@ -27,14 +27,13 @@ class UserflowExtension(object):
     views = views_map
 
     def __init__(self, app, datastore, geoip=None, celery=None, message_cls=None,
-                 jinja_env=None, authomatic=None, views=None, schemas=None,
-                 add_api_routes=True):
+                 authomatic=None, views=None, schemas=None, add_api_routes=True):
         self.app = app
         self.datastore = datastore
 
         self.config = config = self.config_cls(app.config)
         self.request_utils = self.request_utils_cls(config, geoip)
-        self.emails = self.emails_cls(config, message_cls, celery, jinja_env or app.jinja_env)
+        self.emails = self.emails_cls(config, message_cls, celery)
         self.authomatic = authomatic or Authomatic(config['AUTHOMATIC_CONFIG'],
                                                    config['AUTHOMATIC_SECRET_KEY'])
 

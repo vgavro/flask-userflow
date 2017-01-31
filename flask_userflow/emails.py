@@ -1,8 +1,10 @@
+from flask import render_template
+
+
 class Emails(object):
     message_cls = None
-    jinja_env = None
 
-    def __init__(self, config, message_cls, celery, jinja_env):
+    def __init__(self, config, message_cls, celery):
         if message_cls:
             self.message_cls = message_cls
         if not self.message_cls:
@@ -30,14 +32,11 @@ class Emails(object):
         self.dkim_domain = config.get('DKIM_DOMAIN')
         self.dkim_selector = config.get('DKIM_SELECTOR')
 
-        if jinja_env:
-            self.jinja_env = jinja_env
-
     def create(self, name, context, locale):
         subject_template = 'userflow/emails/{}_subject.txt'.format(name)
         html_template = 'userflow/emails/{}.html'.format(name)
-        subject = self.jinja_env.get_template(subject_template).render(**context)
-        html = self.jinja_env.get_template(html_template).render(**context)
+        subject = render_template(subject_template, **context)
+        html = render_template(html_template, **context)
         message = self.message_cls(subject=subject, html=html)
         if self.dkim_key:
             message.dkim(key=self.dkim_key, domain=self.dkim_domain,
