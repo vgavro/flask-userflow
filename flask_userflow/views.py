@@ -2,11 +2,12 @@ from datetime import datetime
 from functools import wraps
 
 from werkzeug.local import LocalProxy
-from flask import request, Response, after_this_request, make_response, session, redirect, jsonify
+from flask import (request, Response, after_this_request, make_response, session, redirect,
+                   jsonify, current_app)
 from flask_login import login_user as _login_user, logout_user, current_user
 from authomatic.adapters import WerkzeugAdapter
 
-from . import _userflow
+from . import _userflow, signals
 
 
 _datastore = LocalProxy(lambda: _userflow.datastore)
@@ -238,6 +239,8 @@ def register_finish(data, login=True, login_remember=False):
 
     if provider_associated:
         _datastore.commit()
+
+    signals.register_finish.send(app=current_app._get_current_object(), user=user)
 
     data = status()
     data['auth_token'] = auth_token
