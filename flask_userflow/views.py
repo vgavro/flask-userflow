@@ -4,7 +4,7 @@ from functools import wraps
 from werkzeug.local import LocalProxy
 from flask import (request, Response, after_this_request, make_response, session, redirect,
                    jsonify, current_app)
-from flask_login import login_user as _login_user, logout_user, current_user
+from flask_login import login_user as _login_user, logout_user, current_user, login_required
 from authomatic.adapters import WerkzeugAdapter
 
 from . import _userflow, signals
@@ -276,6 +276,14 @@ def restore_finish(data, login=True, login_remember=False):
     return data
 
 
+@login_required
+@load_schema('password_change')
+def password_change(data):
+    current_user.set_password(data['password'])
+    _datastore.commit()
+    return status()
+
+
 views_map = {
     '_schema_errors_processor': schema_errors_processor,
 
@@ -291,6 +299,8 @@ views_map = {
     'restore_start': restore_start,
     'restore_confirm': restore_confirm,
     'restore_finish': restore_finish,
+
+    'password_change': password_change,
 }
 
 

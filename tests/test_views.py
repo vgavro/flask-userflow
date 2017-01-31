@@ -259,3 +259,21 @@ def test_restore_finish_fail(client):
                                              'confirm_password': 'wrong_password'})
     assert resp.status_code == 422
     assert 'confirm_password' in resp.json['errors']
+
+
+def test_password_change(client):
+    resp = client.post('/user/status', json={'email': 'vgavro@gmail.com', 'password': 'password'})
+    assert resp.status_code == 200
+
+    resp = client.post('/user/password_change', json={'old_password': 'password',
+                                                      'password': 'newpassword',
+                                                      'confirm_password': 'newpassword'})
+    assert resp.status_code == 200
+    assert resp.json['user']
+
+    resp = client.delete('/user/status')
+    assert resp.status_code == 200
+
+    resp = client.post('/user/status', json={'email': 'vgavro@gmail.com',
+                                             'password': 'newpassword'})
+    assert resp.status_code == 200

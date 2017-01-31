@@ -56,6 +56,9 @@ default_config = (
     ('RESTORE_CONFIRM_API_METHOD', 'POST'),
     ('RESTORE_FINISH_API_URL', '/restore'),
     ('RESTORE_FINISH_API_METHOD', 'PUT'),
+
+    ('PASSWORD_CHANGE_API_URL', '/password_change'),
+    ('PASSWORD_CHANGE_API_METHOD', 'POST'),
 )
 
 

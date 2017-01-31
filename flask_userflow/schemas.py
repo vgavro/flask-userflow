@@ -2,6 +2,7 @@ import pytz
 import marshmallow as ma
 from marshmallow import validate
 from itsdangerous import BadSignature, SignatureExpired
+from flask_login import current_user
 
 from . import _userflow
 
@@ -146,6 +147,16 @@ class RestoreFinishSchema(ConfirmPasswordMixin, TokenMixin, UserMixin, BaseSchem
         return user, data
 
 
+class PasswordChangeSchema(ConfirmPasswordMixin, BaseSchema):
+    old_password = ma.fields.Str(required=True, validate=[validate.Length(min=6, max=64)])
+
+    @ma.validates('old_password')
+    def validate_old_password(self, old_password):
+        assert current_user.is_authenticated
+        if not current_user.verify_password(old_password):
+            raise ma.ValidationError('INVALID_PASSWORD')
+
+
 class UserSchema(BaseSchema):
     name = ma.fields.Str(required=True)
     id = ma.fields.Str(required=True)
@@ -169,6 +180,8 @@ schemas_map = {
     'restore_start': RestoreStartSchema(),
     'restore_confirm': RestoreConfirmSchema(),
     'restore_finish': RestoreFinishSchema(),
+
+    'password_change': PasswordChangeSchema(),
 
     'user_schema': UserSchema(),
     'provider_user_schema': ProviderUserSchema(),
