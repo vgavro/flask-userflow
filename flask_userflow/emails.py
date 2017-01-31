@@ -18,11 +18,16 @@ class Emails(object):
             def send(*args, **kwargs):
                 raise RuntimeError('No flask_emails, and message_cls is not configured')
             self.send = send
+
         elif celery:
-            def send(self, to, name, context, locale=None):
-                return self.send_task.delay(to, name, context, locale)
-            self.send_task = self.celery.task(self._send)
-            self.send = send
+            def send(*args, **kwargs):
+                return self._send(*args, **kwargs)
+            self.send_task = celery.task(send)
+
+            def send_delay(name, to, context, locale=None):
+                return self.send_task.delay(name, to, context, locale)
+            self.send = send_delay
+
         else:
             self.send = self._send
 
