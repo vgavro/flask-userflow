@@ -111,4 +111,5 @@ class RequestUtils(object):
         return empty
 
     def get_ua_info(self):
-        return user_agent_parser.Parse(request.headers.get('User-Agent'))
+        ua = request.headers.get('User-Agent')
+        return ua and user_agent_parser.Parse(ua) or None

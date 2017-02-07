@@ -59,15 +59,25 @@ def login_user(user, remember=False, provider=None):
 
     session.pop('auth_provider', None)
 
+    remote_addr = _userflow.request_utils.get_remote_addr()
+    ua_info = _userflow.request_utils.get_ua_info()
+    if _userflow.request_utils.geoip:
+        geoip_info = _userflow.request_utils.get_geoip_info()
+    else:
+        geoip_info = None
+
     if _datastore.track_login_model:
         track_login = _datastore.create_track_login(
             time=datetime.utcnow(),
-            remote_addr=_userflow.request_utils.get_remote_addr(),
-            geoip_info=_userflow.request_utils.get_geoip_info(),
-            ua_info=_userflow.request_utils.get_ua_info(),
+            remote_addr=remote_addr,
+            geoip_info=geoip_info,
+            ua_info=ua_info,
         )
         _datastore.put(track_login)
         after_this_request(lambda r: _datastore.commit())
+
+    signals.logged_in.send(app=current_app._get_current_object(), user=user,
+                           remote_addr=remote_addr, geoip_info=geoip_info, ua_info=ua_info)
     return user.get_auth_token()
 
 
