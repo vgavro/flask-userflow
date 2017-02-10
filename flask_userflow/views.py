@@ -230,12 +230,12 @@ def register_finish(data, login=True, login_remember=False):
     user.set_password(data['password'])
     user.generate_auth_id()
     _datastore.put(user)
+    _datastore.commit()  # TODO: to get user_id
+
     if login:
         auth_token = login_user(user, login_remember)
     else:
         auth_token = None
-
-    _datastore.commit()  # TODO: to get user_id
 
     provider_associated = False
 
